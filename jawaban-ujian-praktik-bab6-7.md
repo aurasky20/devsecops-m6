@@ -31,11 +31,28 @@ docker compose ps --all
 Yang ditunjukkan: 3 generator berstatus `Exited (0)` (selesai menulis 20 baris), sedangkan `postgres-db` dan `fluent-bit` tetap `Up`.
 
 Perjalanan satu baris log:
+generator-api
+generator-auth
+generator-worker
+       ↓
+   Fluent Bit
+       ↓
+   PostgreSQL
 
-1. Generator menulis JSON ke **stdout**.
-2. **Docker Engine** (bukan container generator) mengirimnya lewat _fluentd logging driver_ ke `127.0.0.1:24224` dengan tag `docker.<nama-container>`.
-3. **Fluent Bit** menerimanya di input `forward` dan menahannya di buffer filesystem (`flb-storage`).
-4. Output **pgsql** menulis ke `logs.fluentbit` (kolom `tag`, `time`, `data` JSONB).
+1. **Generator membuat log** >> Container generator-api, generator-auth, atau generator-worker menulis log JSON ke stdout.
+
+2. **Docker Logging Driver menangkap log** >> Docker mengirim log tersebut ke Fluent Bit melalui alamat:
+127.0.0.1:24224
+
+3. **Fluent Bit menerima log** >> Input forward pada Fluent Bit mendengarkan port 24224 dan menerima log dari Docker.
+
+4. **Parser memproses log** >> Parser app_json mengubah string JSON menjadi field yang dapat dibaca (service, level, message, dll.).
+
+5. **Fluent Bit melakukan buffering** >> Log disimpan sementara di memori/disk agar tidak hilang jika database sedang lambat atau tidak tersedia.
+
+6. **Fluent Bit mengirim ke PostgreSQL** >> Output plugin PostgreSQL mengirim log ke service postgres-db:5432.
+
+7. **PostgreSQL menyimpan log** >> Log disimpan sebagai record pada tabel log (misalnya logs.fluentbit).
 
 ### Pertanyaan lanjutan — `fluentd-address` diganti `fluent-bit:24224`
 
